@@ -39,7 +39,7 @@ function pairdata2(data, numHistBins)
     refT = d["RefSegsTrue"];#in julia string indexes can be safely used :)
     perT = d["PerSegsTrue"];
     perF = d["PerSegsFalse"];
-    refT = refT[randperm(length(refT))[1:5]]
+    refT = refT[randperm(length(refT))[1:10]]
     #Pair all reference segments with performance segments marked as true/pass
     # compute the feature vector and the add to true-pairs-data
     for i=1:length(refT)#all reference recordings

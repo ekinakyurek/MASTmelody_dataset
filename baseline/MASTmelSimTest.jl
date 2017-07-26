@@ -65,7 +65,7 @@ function runTests(data,sizes)
 
   #run training
   #model, state = modelrun(bdata, rout; epochs=6, hidden=[256]);
-  model, state = modelrun(bdata ; epochs=12, sizes=sizes, hidden=[256]);
+  model, state = modelrun(bdata ; epochs=12, sizes=sizes, hidden=[300]);
   #preparing test set from the other 8 melody pools
   println("Gathering features for test data...involves DTW computation, will also take some time...")
   dataTest=data[randInds[33:40]];

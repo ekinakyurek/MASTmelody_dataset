@@ -69,7 +69,7 @@ end
 
 
 function init_rnn_weights(hidden, embed)
-    model = Array(Any, 2*length(hidden)+6)
+    model = Array(Any, 2*length(hidden)+9)
     X = embed
     for k = 1:length(hidden)
         H = hidden[k]
@@ -79,14 +79,19 @@ function init_rnn_weights(hidden, embed)
         X = H
     end
 
-    model[end-1] = 0.1*randn(2*hidden[end]+150,1)
     model[end] = zeros(1,1)
+    model[end-1] = 0.1*randn(10,1)
 
-    model[end-3] = 0.1*randn(100,100)
-    model[end-2] = zeros(1,100)
+    model[end-2] = zeros(1,10)
+    model[end-3] = 0.1*randn(100,10)
 
-    model[end-5] = 0.1*randn(150,150);
-    model[end-4] = 0.1*randn(1,150);
+    model[end-4] = zeros(1,100)
+    model[end-5] = 0.1*randn(2*hidden[end]+150,100)
+
+    model[end-6] = zeros(1,150);
+    model[end-7] = 0.1*randn(150,150);
+
+    model[end-8] = 0.1*randn(100,100);
     #model[end] = xavier(vocab,embed)    #We (word embedding vector)
     return model
 end
@@ -117,11 +122,11 @@ end
 
 function rnn(w,s,input; start = 0, pdrop=0.5)
     for i=1:2:length(s)
-        #input = dropout(input,pdrop)
+        input = dropout(input,pdrop)
         (s[i],s[i+1]) = lstm(w[start + i],w[start + i+1],s[i],s[i+1],input)
         input = s[i]
     end
-    #input = dropout(input,pdrop)
+    input = dropout(input,pdrop)
     return input
 end
 
@@ -134,15 +139,19 @@ function model(w,x,y,dtw,s)
     xfeat = 0
     s1 = copy(s)
     for i in range(1,10)
-        xfeat = rnn(w,s1,x[:,100*(i-1)+1:100*i]*w[end-3].+w[end-2])
+        xfeat = rnn(w,s1,x[:,100*(i-1)+1:100*i]*w[end-8])
     end
     s2 = copy(s)
     yfeat = 0
     for i in range(1,10)
-        yfeat = rnn(w,s2,y[:,100*(i-1)+1:100*i]*w[end-3].+w[end-2])
+        yfeat = rnn(w,s2,y[:,100*(i-1)+1:100*i]*w[end-8])
     end
-    dtwfeat = relu(dtw*w[end-5] .+ w[end-4]);
-    hcat(xfeat,yfeat,dtwfeat)*w[end-1] .+ w[end]
+    dtwfeat = relu(dtw*w[end-7] .+ w[end-6]);
+    dtwfeat = dropout(dtwfeat,0.3)
+    z = hcat(xfeat,yfeat,dtwfeat);
+    z = relu(z*w[end-5] .+ w[end-4]);
+    z = relu(z*w[end-3] .+ w[end-2]);
+    return z*w[end-1] .+ w[end];
 end
 
 function init_params(model)
