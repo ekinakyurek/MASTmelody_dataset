@@ -30,7 +30,9 @@ dbaDir=replace(toolsDir,"baseline","f0data");
 # with respect to melodies, produce json files containing these melody sets
 # and a jld file("groupedMelSegData.jld") contaning all data
 include("gatherMelSegsInAPool.jl");
-runDBAPrepProcess(dbaDir);
+if !isfile(joinpath(dbaDir,"groupedMelSegData.jld"))
+  runDBAPrepProcess(dbaDir);
+end
 
 #Running automatic scoring tests:
 # Each instance will be created by pairing two recordings from the same melody pool:

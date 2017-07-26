@@ -21,7 +21,7 @@ function DTWCostHist(sig1,sig2,numHistBins)
   cost, match1, match2 = DynamicTimeWarp.fastdtw(sig1,sig2,16);
   #dist: absolute delta signal after dtw matching of two signals
   dist=abs(sig1[match1]-sig2[match2]);
-  
+
   h = fit(Histogram, dist, 0:1/numHistBins:1.0; closed=:right);
   hist=h.weights/length(match1);
   #last two values altered to contain two other features
@@ -30,17 +30,16 @@ function DTWCostHist(sig1,sig2,numHistBins)
   return hist;
 end
 
-# Generate positive and negative instances(feature vector for pairs of melodic segments):
-# Returns a pair of matrices: one for true one for false examples.
-# The columns of matrices contain the feature vectors.
-function pairdata(data,numHistBins)
+
+function pairdata2(data, numHistBins)
   tout = Float32[];#tout: true-out: matching melodic pairs' (piano-singing) feature
   fout = Float32[];#fout: false-out: non-matching melodic pairs' (piano-singing) feature
+
   for d in data
     refT = d["RefSegsTrue"];#in julia string indexes can be safely used :)
     perT = d["PerSegsTrue"];
     perF = d["PerSegsFalse"];
-
+    refT = refT[randperm(length(refT))[1:5]]
     #Pair all reference segments with performance segments marked as true/pass
     # compute the feature vector and the add to true-pairs-data
     for i=1:length(refT)#all reference recordings
@@ -48,44 +47,30 @@ function pairdata(data,numHistBins)
         # Computation of the feature as histogram of differences after matching two signals by DTW
         # the vector is appended to true-output pair
         # If you would prefer another input for the MLP, consider modifying this line
-        append!(tout, DTWCostHist(refT[i],perT[j],numHistBins));
+        append!(tout, vcat(perT[j], refT[i], DTWCostHist(refT[i],perT[j],numHistBins)));
       end
     end
 
-    #pair all reference segments with performance segments marked as false/fail
-    # compute the feature vector and the add to false-pairs-data
     for i=1:length(refT)#all reference recordings
-      for j=1:length(perF)#all false-performance recordings
-        #computation of the feature as histogram of differences after matching two signals by DTW
-        # the vector is appended to false-output pair
+      for j=1:length(perF)#all true-performance recordings
+        # Computation of the feature as histogram of differences after matching two signals by DTW
+        # the vector is appended to true-output pair
         # If you would prefer another input for the MLP, consider modifying this line
-        append!(fout, DTWCostHist(refT[i],perF[j],numHistBins));
+        append!(fout, vcat(perF[j], refT[i], DTWCostHist(refT[i],perF[j],numHistBins)));
       end
     end
   end
 
-  #re-shape feature vectors computed from true and false pairs in matrix form and return both
-  rows=numHistBins;
-  cols = div(length(tout),rows);
-  tout = reshape(tout, (rows,cols));
-  cols = div(length(fout),rows);
-  fout = reshape(fout, (rows,cols));
-  return (tout, fout);
-
+rows=2150;
+cols = div(length(tout),rows);
+tout = reshape(tout, (rows,cols));
+cols = div(length(fout),rows);
+fout = reshape(fout, (rows,cols));
+return (tout, fout);
 end
 
 
-# Split the pair data into a balanced train, dev and test set with a given minibatch size.
-#   pdata: tout and fout returned by pairdata(),
-#   contains feature vectors computed from true and false pairs of melodic segments
-#
-#   While this function can be used to split a whole pool into three packages, we prefer to
-#   handle this operation in two steps because we want to use different pools for train,
-#   development and test sets. So, this function is called twice: one for
-#   preparing the training and development sets
-#   and one for the test set
-
-function trntst(pdata; batch=100, splt=((50000,50000),(5000,5000),(5000,5000)))
+function trntst2(pdata; batch=100, splt=((50000,50000),(5000,5000),(5000,5000)))
   (tout,fout) = pdata;
   (nd,nt) = size(tout);#nt: number of true-pairs
   (nd,nf) = size(fout);#nf: number of false-pairs
@@ -108,13 +93,94 @@ function trntst(pdata; batch=100, splt=((50000,50000),(5000,5000),(5000,5000)))
       for i=1:batch:length(r)-batch
         xbatch = x[:,r[i:i+batch-1]];
         ybatch = y[:,r[i:i+batch-1]];
-        push!(batches, (xbatch, ybatch))
+        push!(batches, (xbatch', ybatch'))
       end
       #adding to 'batches' for this split in 'bdata'
       push!(bdata, batches);
     end
   end
   return bdata
+end
+
+
+# Generate positive and negative instances(feature vector for pairs of melodic segments):
+# Returns a pair of matrices: one for true one for false examples.
+# The columns of matrices contain the feature vectors.
+function pairdata(data, numOfHistBins)
+  tout = Any[];#tout: true-out: matching melodic pairs' (piano-singing) feature
+  fout = Any[];#fout: false-out: non-matching melodic pairs' (piano-singing) feature
+  rout = Array{Any,1}(length(data));
+
+  for melody_index = 1:length(data)
+    d = data[melody_index];
+    rout[melody_index] = [];
+    refT = d["RefSegsTrue"];#in julia string indexes can be safely used :)
+    perT = d["PerSegsTrue"];
+    perF = d["PerSegsFalse"];
+    #Pair all reference segments with performance segments marked as true/pass
+    # compute the feature vector and the add to true-pairs-data
+    for i=1:length(refT)#all reference recordings
+      push!(rout[melody_index],refT[i]);
+      for j=1:length(perT)#all true-performance recordings
+        # Computation of the feature as histogram of differences after matching two signals by DTW
+        # the vector is appended to true-output pair
+        # If you would prefer another input for the MLP, consider modifying this line
+        push!(tout, (melody_index,i,perT[j]));
+      end
+      for j=1:length(perF)#all false-performance recordings
+        #computation of the feature as histogram of differences after matching two signals by DTW
+        # the vector is appended to false-output pair
+        # If you would prefer another input for the MLP, consider modifying this line
+        push!(fout, (melody_index,i,perF[j]));
+      end
+    end
+  end
+
+  return (tout, fout, rout);
+
+end
+
+
+# Split the pair data into a balanced train, dev and test set with a given minibatch size.
+#   pdata: tout and fout returned by pairdata(),
+#   contains feature vectors computed from true and false pairs of melodic segments
+#
+#   While this function can be used to split a whole pool into three packages, we prefer to
+#   handle this operation in two steps because we want to use different pools for train,
+#   development and test sets. So, this function is called twice: one for
+#   preparing the training and development sets
+#   and one for the test set
+
+function trntst(pdata; batch=100, splt=((50000,50000),(5000,5000),(5000,5000)))
+  (tout,fout, rout) = pdata;
+  nt = length(tout);#nt: number of true-pairs
+  nf = length(fout);#nf: number of false-pairs
+  rt = randperm(nt);#forming random order of indexes to shuffle
+  rf = randperm(nf);
+  nt = nf = 0
+  bdata = Any[];#batch data for all sets of splits
+  for (t,f) in splt
+    if(t>0 && f>0)#if there exists (0,0) in splits, skip it
+      #forming input-vector for MLP
+      # Left half contains true samples, right half contains false samples
+      x = hcat(tout[rt[nt+1:nt+t]], fout[rf[nf+1:nf+f]]);
+      #forming the output vector: 1:true, -1: false
+      y = hcat(ones(Float32,1,t), -ones(Float32,1,f))
+
+      nt += t; nf += f;
+      r = randperm(t+f);
+      batches = Any[];
+      #forming a single batch in each loop, putting in 'batches'
+      for i=1:batch:length(r)-batch
+        xbatch = x[r[i:i+batch-1]];
+        ybatch = y[r[i:i+batch-1]];
+        push!(batches, (xbatch, ybatch))
+      end
+      #adding to 'batches' for this split in 'bdata'
+      push!(bdata, batches);
+    end
+  end
+  return bdata, rout
 end
 
 # To load and save KnetArrays: (this is part of Knet now)

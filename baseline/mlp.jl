@@ -40,7 +40,7 @@ mlpgrad = grad(mlploss)
 # Training loop, does one pass over data, modifies mlp in place
 function train!(m::MLP, data)
     for (x,y) in data
-        dw = mlpgrad(m.weights, x, y)
+        dw = mlpgrad(m.weights, x[2001:2150,:], y)
         for i in 1:length(m.weights)
             update!(m.weights[i], dw[i], m.oparams[i])
         end
@@ -51,7 +51,7 @@ end
 function test(m::MLP, data)
     sumloss = numloss = 0
     for (x,y) in data
-        sumloss += mlploss(m.weights, x, y)
+        sumloss += mlploss(m.weights, x[2001:2150,:], y)
         numloss += 1
     end
     sumloss / numloss
@@ -61,7 +61,7 @@ end
 function acc(m::MLP, data)
     sumloss = numloss = 0
     for (x,y) in data
-        z = mlppred(m.weights,x)
+        z = mlppred(m.weights,x[2001:2150,:])
         sumloss += mean((z .* y) .> 0)
         numloss += 1
     end
@@ -70,7 +70,7 @@ end
 
 # Function for running training and testing on data with epochs and reporting the results
 #   data[1]:train set, data[2]: dev. set
-function mlprun(data; epochs=100, sizes=[150,24,1], model=MLP(sizes; atype = typeof(data[1][1][1])))
+function modelrun(data; epochs=100, hidden=[250], sizes=[150,1], model=MLP(sizes; atype = typeof(data[1][1][1])))
     #msg(e) = println((e,map(d->acc(model,d),data)...,map(d->test(model,d),data)...)); msg(0)
     println("Accuracies for: train-dev sets:")
     msg(e) = println((e,map(d->acc(model,d),data)...)); msg(0)

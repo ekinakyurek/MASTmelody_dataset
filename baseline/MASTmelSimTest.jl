@@ -3,7 +3,7 @@ using Knet, JLD;
 #loading data processing and pooling functions
 include("formdata.jl");
 #loading multi-layer perceptron functions
-include("mlp.jl")
+include("model.jl")
 
 #Function to decide split values starting from data size
 # option=1->create splits/sizes for train and development data
@@ -52,27 +52,33 @@ function runTests(data,sizes)
   # each piano-singing pair in a melodic set. The output is a tuple that carries
   # features of true-pairs(grade=pass) and features of false-pairs(grade=fail)
   println("Gathering features for training data...involves DTW computation, will take some time...(maybe 10 mins.)")
-  trainPairData=pairdata(dataTrain,numHistBins);#see formdata.jl for implementation
-
+  #trainPairData=pairdata(dataTrain,numHistBins);#see formdata.jl for implementation
+  trainPairData=pairdata2(dataTrain,numHistBins);#see formdata.jl for implementation
   # deciding how the trainPairData should be splitted
   # to have balanced set of true and false samples
-  splts=decideSplits(trainPairData,1);
+  splts=decideSplits(trainPairData,2);
   #creating batch data for the train and development sets
-  bdata = trntst(trainPairData,batch=100,splt=splts);
+  #bdata, rout = trntst(trainPairData,batch=100,splt=splts);
+  bdata = trntst2(trainPairData,batch=100,splt=splts);
+  print(length(bdata))
   print("Splits for train-dev sets (number of true-pairs and false-pairs): ");println(splts);
 
   #run training
-  model=mlprun(bdata; epochs=100, sizes=sizes);
-
+  #model, state = modelrun(bdata, rout; epochs=6, hidden=[256]);
+  model, state = modelrun(bdata ; epochs=12, sizes=sizes, hidden=[256]);
   #preparing test set from the other 8 melody pools
   println("Gathering features for test data...involves DTW computation, will also take some time...")
   dataTest=data[randInds[33:40]];
-  testPairData=pairdata(dataTest,numHistBins);
-  splts=decideSplits(testPairData,2);println("Number of true-pairs and false-pairs: ",splts[1]);
+  #testPairData=pairdata(dataTest,numHistBins);
+  testPairData=pairdata2(dataTest,numHistBins);
+  splts=decideSplits(testPairData,2);
+  println("Number of true-pairs and false-pairs: ",splts[1]);
   #creating single batch data for the test set
-  bTestData=trntst(testPairData,batch=100,splt=splts);
+  #bTestData, rout = trntst(testPairData,batch=100,splt=splts);
+  bTestData = trntst2(testPairData,batch=100,splt=splts);
   println("Accuracy for the test set:")
-  println(map(d->acc(model,d),bTestData));
+  println(map(d->acc(model,d, state),bTestData));
+  #println(map(d->acc(model,d,rout,state),bTestData));
   #save the model in a jld file (remember, the test-train separation was random)
   println("Saving the model to trainedModel.jld")
   save(joinpath(dbaDir,"trainedModel.jld"), "model", model);
